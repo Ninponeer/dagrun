@@ -1,0 +1,28 @@
+plan:
+  id: DEMO-01
+  goal: "Example plan demonstrating schema and cycle-free execution"
+
+tasks:
+  - id: T1
+    title: "Initialize module"
+    action: init_module
+    agent: dev-agent
+    depends_on: []
+    files: ["src/module/__init__.py"]
+    mode: pull
+
+  - id: T2
+    title: "Refactor core logic"
+    action: refactor_core
+    agent: dev-agent
+    depends_on: [T1]
+    files: ["src/module/core.py"]
+    mode: either
+
+  - id: T3
+    title: "Generate tests"
+    action: generate_tests
+    agent: test-agent
+    depends_on: [T2]
+    files: ["tests/test_core.py"]
+    mode: push
