@@ -8,10 +8,23 @@ class DagError(Exception):
 class DagEngine:
     def __init__(self, plan: PlanModel):
         self.plan = plan
+        self._validate_unique_task_ids()
         self.tasks = {t.id: t for t in plan.tasks}
         self.graph = {t.id: t.depends_on for t in plan.tasks}
         self._validate_existence()
         self._validate_cycles()
+
+    def _validate_unique_task_ids(self):
+        """Ensures all task IDs are unique (no silent overwrites)."""
+        seen: Set[str] = set()
+        duplicates: Set[str] = set()
+        for t in self.plan.tasks:
+            if t.id in seen:
+                duplicates.add(t.id)
+            seen.add(t.id)
+        if duplicates:
+            dup_list = ", ".join(sorted(duplicates))
+            raise DagError(f"Duplicate task id(s) found: {dup_list}")
 
     def _validate_existence(self):
         """Ensures all referenced dependencies actually exist in the plan."""

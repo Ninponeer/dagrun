@@ -48,3 +48,14 @@ def test_multiple_ready_tasks_determinism():
     )
     engine = DagEngine(plan)
     assert engine.get_execution_order() == ["T1", "T2", "T3"]
+
+def test_duplicate_task_ids_rejected():
+    plan = PlanModel(
+        plan=PlanMetadata(id="DUPES", goal="Test Duplicate IDs"),
+        tasks=[
+            TaskModel(id="T1", title="First", action="A1", agent="Ag1", depends_on=[]),
+            TaskModel(id="T1", title="Second", action="A2", agent="Ag2", depends_on=[]),
+        ],
+    )
+    with pytest.raises(DagError, match="Duplicate task id"):
+        DagEngine(plan)

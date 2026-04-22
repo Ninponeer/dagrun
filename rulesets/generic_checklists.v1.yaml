@@ -1,0 +1,29 @@
+version: 1
+rules:
+  # High-signal, common across many repos
+  - name: checkboxes
+    prefix: C
+    mode: either
+    action: execute
+    match_kind: ["checkbox"]
+
+  - name: numbered
+    prefix: N
+    mode: pull
+    action: execute
+    match_kind: ["numbered"]
+
+  # Bullets are noisy; only take them from likely-plan sections.
+  - name: bullets_in_plan_sections
+    prefix: B
+    mode: either
+    action: execute
+    match_kind: ["bullet"]
+    match_heading_path_contains: ["next", "priorit", "todo", "tasks", "roadmap", "plan", "checklist"]
+
+  # Last resort (opt-in by using this ruleset): capture everything else.
+  - name: fallback
+    prefix: T
+    mode: either
+    action: execute
+

@@ -125,6 +125,7 @@ DAGrun is a post‑ceremony orchestration substrate for modern development workf
 - [ ] DAG builder  
 - [ ] Hybrid scheduler  
 - [ ] Agent interface (RPC)  
+- [ ] Markdown action-plan → `.plan` converter  
 - [ ] Editor extension  
 - [ ] Graph visualization  
 - [ ] Multi‑agent concurrency  

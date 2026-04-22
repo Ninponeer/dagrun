@@ -11,11 +11,17 @@ def load_plan(plan_path: Union[str, Path]) -> PlanModel:
     if not path.exists():
         raise FileNotFoundError(f"Plan file not found: {plan_path}")
     
-    with open(path, 'r') as f:
-        try:
-            data = yaml.safe_load(f)
-        except yaml.YAMLError as e:
-            raise ValueError(f"Error parsing YAML in {plan_path}: {e}")
+    # Always prefer UTF-8 to support Unicode in plan files across platforms.
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        # Fallback for legacy files; still deterministic.
+        raw = path.read_text(encoding="utf-8-sig")
+
+    try:
+        data = yaml.safe_load(raw)
+    except yaml.YAMLError as e:
+        raise ValueError(f"Error parsing YAML in {plan_path}: {e}")
     
     # Pydantic validation
     return PlanModel(**data)
