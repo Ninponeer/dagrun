@@ -1,5 +1,5 @@
 from typing import List, Dict, Set
-from .models import PlanModel, TaskModel
+from .models import PlanModel, TaskModel, TaskStatus
 
 class DagError(Exception):
     """Specific error for DAG-related issues (cycles, missing dependencies)."""
@@ -80,6 +80,69 @@ class DagEngine:
                     queue.append(v)
         
         return order
+
+    def get_ready_tasks(self) -> List[TaskModel]:
+        """
+        Returns a list of tasks that are PENDING and whose dependencies are all COMPLETED.
+        """
+        ready_tasks = []
+        for task in self.tasks.values():
+            if task.status == TaskStatus.PENDING:
+                deps_completed = all(
+                    self.tasks[dep_id].status == TaskStatus.COMPLETED
+                    for dep_id in task.depends_on
+                )
+                if deps_completed:
+                    ready_tasks.append(task)
+        return ready_tasks
+
+    def run_scheduler(self):
+        """
+        A simple scheduler loop that runs tasks as they become ready.
+        """
+        import time
+        while True:
+            ready_tasks = self.get_ready_tasks()
+            if not ready_tasks:
+                # Check if all tasks are completed
+                all_completed = all(t.status == TaskStatus.COMPLETED for t in self.tasks.values())
+                if all_completed:
+                    break
+                else:
+                    # Check if any tasks failed
+                    if any(t.status == TaskStatus.FAILED for t in self.tasks.values()):
+                        break
+                    
+                    print("Waiting for tasks to become ready...")
+                    time.sleep(1)
+                    continue
+
+            for task in ready_tasks:
+                task.status = TaskStatus.RUNNING
+                print(f"Running task: {task.id} - {task.title} (Agent: {task.agent})")
+                # Simulate work
+                time.sleep(0.5)
+                task.status = TaskStatus.COMPLETED
+                print(f"Finished task: {task.id}")
+
+    def run(self):
+        """
+        Executes the tasks in the plan using the scheduler.
+        """
+        self.run_scheduler()
+
+    def to_mermaid(self) -> str:
+        """
+        Generates a Mermaid.js graph definition of the DAG.
+        """
+        lines = ["graph TD"]
+        for task_id, task in self.tasks.items():
+            # Define the node with a label
+            lines.append(f'    {task_id}["{task.id}: {task.title}"]')
+            # Define dependencies as edges
+            for dep in task.depends_on:
+                lines.append(f"    {dep} --> {task_id}")
+        return "\n".join(lines)
 
     def validate(self) -> bool:
         """Utility to confirm the plan is valid and executable."""

@@ -21,6 +21,7 @@ class ExtractedItem:
     checked: Optional[bool] = None  # for [ ] / [x] items when present
     kind: Literal["checkbox", "numbered", "bullet"] = "bullet"
     file_paths: Tuple[str, ...] = ()
+    indent: int = 0  # Indentation level for hierarchy
 
 
 def _strip_md_inline(text: str) -> str:
@@ -72,6 +73,7 @@ def _parse_bullet_item(line: str) -> Optional[str]:
 
 _BACKTICK_RE = re.compile(r"`([^`]+)`")
 _FILELIKE_RE = re.compile(r"(?i)\b[\w./-]+\.(py|ts|tsx|js|json|yaml|yml|md|txt|toml|ini|cfg|cs|cpp|c|h|hpp|gd|tres|tscn)\b")
+_DEPENDENCY_RE = re.compile(r"(?:depends\s*on|depends:)\s*([A-Z]\d+)", re.IGNORECASE)
 
 
 def _extract_file_paths(text: str) -> Tuple[str, ...]:
@@ -115,6 +117,12 @@ def extract_action_items(md_text: str) -> List[ExtractedItem]:
 
     for raw in md_text.splitlines():
         line = raw.rstrip("\n")
+        if not line.strip():
+            continue
+            
+        # Calculate indentation level (number of leading spaces / 2)
+        indent = len(line) - len(line.lstrip())
+        indent_level = indent // 2
 
         if line.startswith("#"):
             # Markdown headings: count leading # until a space.
@@ -141,6 +149,7 @@ def extract_action_items(md_text: str) -> List[ExtractedItem]:
                     checked=checked,
                     kind="checkbox",
                     file_paths=_extract_file_paths(cleaned),
+                    indent=indent_level,
                 )
             )
             continue
@@ -156,6 +165,7 @@ def extract_action_items(md_text: str) -> List[ExtractedItem]:
                     checked=None,
                     kind="numbered",
                     file_paths=_extract_file_paths(cleaned),
+                    indent=indent_level,
                 )
             )
             continue
@@ -171,6 +181,7 @@ def extract_action_items(md_text: str) -> List[ExtractedItem]:
                     checked=None,
                     kind="bullet",
                     file_paths=_extract_file_paths(cleaned),
+                    indent=indent_level,
                 )
             )
 
@@ -245,7 +256,14 @@ def default_rules() -> List[Rule]:
         Rule(name="short_term", prefix="S", match_section_contains=("short-term", "short term")),
         Rule(name="deferred", prefix="F", match_section_contains=("deferred",)),
         Rule(name="migration", prefix="M", match_section_contains=("migration",), match_kind=("checkbox",)),
-        Rule(name="fallback", prefix="T"),
+        Rule(
+            name="fallback", 
+            prefix="T", 
+            exclude_section_contains=(
+                "metadata", "overview", "objectives", "current state", "risks", "accomplishments", "decisions", 
+                "rationale", "insights", "observations", "documentation", "notes"
+            )
+        ),
     ]
 
 
@@ -279,33 +297,47 @@ def md_to_plan(
                 buckets[r.name][1].append(item)
                 break
 
-    prev_task_id: Optional[str] = None
+    # Task generation with hierarchy and explicit deps
+    prev_tasks: Dict[int, str] = {} # indent_level -> last_task_id
+    
     for r in rule_list:
         group = buckets[r.name][1]
         if not group:
             continue
         for i, item in enumerate(group, 1):
             tid = _task_id(r.prefix, i, strategy=id_strategy, text=item.text)
-            deps = [prev_task_id] if (chain_dependencies and prev_task_id) else []
+            
+            # 1. Hierarchical Dependency: depend on the item at the level above
+            deps = []
+            if item.indent > 0 and (item.indent - 1) in prev_tasks:
+                deps.append(prev_tasks[item.indent - 1])
+            elif item.indent in prev_tasks:
+                # If same level, we still chain (sequential flow within a group)
+                deps.append(prev_tasks[item.indent])
+                
+            # 2. Explicit Dependencies: (depends: T1)
+            explicit_deps = _DEPENDENCY_RE.findall(item.text)
+            deps.extend(explicit_deps)
+            
             tasks.append(
                 TaskModel(
                     id=tid,
                     title=item.text,
                     action=r.action,
                     agent=r.agent or default_agent,
-                    depends_on=deps,
+                    depends_on=list(set(deps)),
                     files=list(item.file_paths),
                     mode=r.mode,
                 )
             )
-            prev_task_id = tid
+            prev_tasks[item.indent] = tid
 
     return PlanModel(plan=PlanMetadata(id=derived_plan_id, goal=derived_goal), tasks=tasks)
 
 
 def plan_to_yaml(plan: PlanModel) -> str:
     # Ensure stable key ordering in output.
-    data = plan.model_dump()
+    data = plan.model_dump(mode="json")
     return yaml.safe_dump(data, sort_keys=False, allow_unicode=True)
 
 

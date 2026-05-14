@@ -29,6 +29,20 @@ def main():
     validate_parser = subparsers.add_parser("validate", help="Validate a .plan file")
     validate_parser.add_argument("plan", type=Path, help="Path to the .plan file")
 
+    # Run command
+    run_parser = subparsers.add_parser("run", help="Execute a .plan file")
+    run_parser.add_argument("plan", type=Path, help="Path to the .plan file")
+    run_parser.add_argument("--dry-run", action="store_true", help="Print execution order without running tasks")
+
+    # Visualize command
+    viz_parser = subparsers.add_parser("visualize", help="Generate a Mermaid chart for a .plan file")
+    viz_parser.add_argument("plan", type=Path, help="Path to the .plan file")
+
+    # Embed Visualization command
+    embed_parser = subparsers.add_parser("embed-viz", help="Embed the Mermaid chart into the source Markdown file")
+    embed_parser.add_argument("plan", type=Path, help="Path to the .plan file")
+    embed_parser.add_argument("markdown", type=Path, help="Path to the source .md file")
+
     # Init command
     init_parser = subparsers.add_parser("init", help="Initialize DAGrun workspace (.dagrun folder)")
     init_parser.add_argument(
@@ -79,18 +93,75 @@ def main():
         except Exception as e:
             print(f"❌ Validation failed: {e}", file=sys.stderr)
             sys.exit(1)
+            
+        return
 
-    if args.command == "init":
+    elif args.command == "visualize":
+        try:
+            plan = load_plan(args.plan)
+            engine = DagEngine(plan)
+            print(engine.to_mermaid())
+        except Exception as e:
+            print(f"❌ Visualization failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    elif args.command == "embed-viz":
+        try:
+            plan = load_plan(args.plan)
+            engine = DagEngine(plan)
+            mermaid_graph = engine.to_mermaid()
+            
+            md_path = args.markdown
+            content = md_path.read_text(encoding="utf-8")
+            
+            # Avoid duplicate embeddings
+            if "## Execution Graph" in content:
+                import re
+                content = re.sub(r"## Execution Graph.*?\n```mermaid.*?```", "", content, flags=re.DOTALL)
+            
+            viz_block = f"\n\n## Execution Graph\n\n```mermaid\n{mermaid_graph}\n```\n"
+            md_path.write_text(content.strip() + viz_block, encoding="utf-8")
+            print(f"✅ Embedded graph into: {md_path}")
+        except Exception as e:
+            print(f"❌ Embedding failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    elif args.command == "run":
+
+        try:
+            plan = load_plan(args.plan)
+            engine = DagEngine(plan)
+            
+            if args.dry_run:
+                print(f"🚀 Dry run for plan '{plan.plan.id}'")
+                order = engine.get_execution_order()
+                for i, task_id in enumerate(order, 1):
+                    task = engine.tasks[task_id]
+                    print(f"  {i}. {task_id}: {task.title}")
+                return
+
+            print(f"🚀 Executing plan '{plan.plan.id}'...")
+            engine.run()
+            print("✅ Execution completed successfully.")
+        except Exception as e:
+            print(f"❌ Execution failed: {e}", file=sys.stderr)
+            sys.exit(1)
+            
+        return
+
+    elif args.command == "init":
         try:
             root = find_project_root(args.path)
             dagrun_dir = ensure_dagrun_dir(root)
             print(f"✅ Initialized DAGrun workspace at: {dagrun_dir}")
-            return
         except Exception as e:
             print(f"❌ init failed: {e}", file=sys.stderr)
             sys.exit(1)
+        return
 
-    if args.command == "md":
+    elif args.command == "md":
         try:
             if args.md_command == "extract":
                 text = args.markdown.read_text(encoding="utf-8")

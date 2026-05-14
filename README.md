@@ -117,8 +117,51 @@ It focuses on:
 DAGrun is a post‑ceremony orchestration substrate for modern development workflows.
 
 ---
-
+ 
+## Usage
+ 
+### Installation
+```bash
+pip install .
+```
+ 
+### Commands
+ 
+#### 1. Initialize Workspace
+Creates a `.dagrun` folder in your project root to store plans and state.
+```bash
+dagrun init /path/to/project
+```
+ 
+#### 2. Convert Markdown to Plan
+Converts a Markdown action plan into a structured `.plan` YAML file.
+```bash
+dagrun md to-plan action_plan.md
+```
+*Outputs to `.dagrun/<filename>.plan` by default.*
+ 
+#### 3. Validate Plan
+Checks for schema correctness and DAG logical errors (cycles, missing dependencies).
+```bash
+dagrun validate my_plan.plan
+```
+ 
+#### 4. Visualize DAG
+Generates a Mermaid.js graph definition for visualization in Mermaid-compatible viewers.
+```bash
+dagrun visualize my_plan.plan
+```
+ 
+#### 5. Execute Plan
+Runs the tasks in the plan according to their dependencies.
+```bash
+dagrun run my_plan.plan
+```
+ 
+---
+ 
 ## Roadmap
+
 
 - [ ] DSL schema  
 - [ ] Parser + validator  
