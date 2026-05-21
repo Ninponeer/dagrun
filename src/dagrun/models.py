@@ -22,6 +22,8 @@ class TaskModel(BaseModel):
     files: List[str] = Field(default_factory=list, description="Relevant file paths")
     mode: Literal["pull", "push", "either"] = Field(default="either", description="Scheduling mode")
     status: TaskStatus = Field(default=TaskStatus.PENDING, description="Current status of the task")
+    macro_lane: Optional[str] = Field(default=None, description="Macro swim lane for architectural organization")
+    micro_lane: Optional[str] = Field(default=None, description="Micro swim lane for specialized tracking")
 
 class PlanMetadata(BaseModel):
     id: str = Field(..., description="Unique plan identifier")
