@@ -96,7 +96,65 @@ class DagEngine:
                     ready_tasks.append(task)
         return ready_tasks
 
+    def invalidate_task(self, task_id: str):
+        """
+        Sets a task and all its downstream dependencies to PENDING.
+        """
+        if task_id not in self.tasks:
+            raise DagError(f"Task '{task_id}' not found in plan.")
+
+        # Find all descendants using BFS/DFS on the reverse graph
+        reverse_graph: Dict[str, List[str]] = {t_id: [] for t_id in self.tasks}
+        for t_id, deps in self.graph.items():
+            for dep in deps:
+                reverse_graph[dep].append(t_id)
+
+        visited = set()
+        stack = [task_id]
+        while stack:
+            u = stack.pop()
+            if u not in visited:
+                visited.add(u)
+                self.tasks[u].status = TaskStatus.PENDING
+                stack.extend(reverse_graph.get(u, []))
+        
+        return visited
+
+    def invalidate_lane(self, macro_lane: str, micro_lane: Optional[str] = None) -> Set[str]:
+        """
+        Invalidates all tasks in a specific lane and their downstream dependencies.
+        """
+        impacted_tasks = set()
+        for task in self.tasks.values():
+            if task.macro_lane == macro_lane:
+                if micro_lane is None or task.micro_lane == micro_lane:
+                    impacted_tasks.update(self.invalidate_task(task.id))
+        
+        return impacted_tasks
+
+    def get_impacted_tasks(self, task_id: str) -> Set[str]:
+        """
+        Predicts which tasks would be invalidated if task_id were updated.
+        """
+        # Temporary copy to avoid mutating state
+        import copy
+        temp_engine = copy.deepcopy(self)
+        return temp_engine.invalidate_task(task_id)
+
+    def get_impacted_lanes(self, task_id: str) -> Set[str]:
+        """
+        Identifies all macro-lanes impacted by a change to task_id.
+        """
+        impacted = self.get_impacted_tasks(task_id)
+        lanes = set()
+        for tid in impacted:
+            lane = self.tasks[tid].macro_lane
+            if lane:
+                lanes.add(lane)
+        return lanes
+
     def run_scheduler(self):
+
         """
         A simple scheduler loop that runs tasks as they become ready.
         """
@@ -133,15 +191,33 @@ class DagEngine:
 
     def to_mermaid(self) -> str:
         """
-        Generates a Mermaid.js graph definition of the DAG.
+        Generates a Mermaid.js graph definition of the DAG,
+        organized by swim lanes in subgraphs.
         """
         lines = ["graph TD"]
+        
+        # Group tasks by macro lane
+        lanes: Dict[str, List[TaskModel]] = {}
+        for task in self.tasks.values():
+            lane = task.macro_lane or "Uncategorized"
+            lanes.setdefault(lane, []).append(task)
+        
+        # Define subgraphs for each lane
+        for lane_name, tasks in lanes.items():
+            # Replace spaces with underscores for Mermaid ID
+            safe_lane_id = lane_name.replace(" ", "_").replace("🌌", "").replace("🌉", "").replace("🎨", "").replace("⚔️", "").replace("📜", "").replace("🛠️", "").strip()
+            lines.append(f'    subgraph {safe_lane_id} ["{lane_name}"]')
+            for task in tasks:
+                # Define the node with a label. Use status for visual hint.
+                status_prefix = "✅ " if task.status == TaskStatus.COMPLETED else "⏳ " if task.status == TaskStatus.PENDING else "⚙️ "
+                lines.append(f'        {task.id}["{status_prefix}{task.id}: {task.title}"]')
+            lines.append("    end")
+        
+        # Define dependencies as edges (outside subgraphs)
         for task_id, task in self.tasks.items():
-            # Define the node with a label
-            lines.append(f'    {task_id}["{task.id}: {task.title}"]')
-            # Define dependencies as edges
             for dep in task.depends_on:
                 lines.append(f"    {dep} --> {task_id}")
+        
         return "\n".join(lines)
 
     def validate(self) -> bool:

@@ -74,6 +74,8 @@ def _parse_bullet_item(line: str) -> Optional[str]:
 _BACKTICK_RE = re.compile(r"`([^`]+)`")
 _FILELIKE_RE = re.compile(r"(?i)\b[\w./-]+\.(py|ts|tsx|js|json|yaml|yml|md|txt|toml|ini|cfg|cs|cpp|c|h|hpp|gd|tres|tscn)\b")
 _DEPENDENCY_RE = re.compile(r"(?:depends\s*on|depends:)\s*([A-Z]\d+)", re.IGNORECASE)
+_MACRO_LANE_RE = re.compile(r"(?i)Macro-Lane:\s*(.*)")
+_MICRO_LANE_RE = re.compile(r"(?i)Micro-Lane:\s*(.*)")
 
 
 def _extract_file_paths(text: str) -> Tuple[str, ...]:
@@ -95,6 +97,21 @@ def _extract_file_paths(text: str) -> Tuple[str, ...]:
         seen.add(c2)
         normed.append(c2)
     return tuple(normed)
+
+
+def _extract_swim_lanes(text: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Extracts Macro-Lane and Micro-Lane from document metadata.
+    """
+    macro, micro = None, None
+    for line in text.splitlines():
+        m_macro = _MACRO_LANE_RE.search(line)
+        if m_macro:
+            macro = m_macro.group(1).strip()
+        m_micro = _MICRO_LANE_RE.search(line)
+        if m_micro:
+            micro = m_micro.group(1).strip()
+    return macro, micro
 
 
 def extract_action_items(md_text: str) -> List[ExtractedItem]:
@@ -279,24 +296,25 @@ def md_to_plan(
 ) -> PlanModel:
     text = md_path.read_text(encoding="utf-8")
     extracted = extract_action_items(text)
+    macro_lane, micro_lane = _extract_swim_lanes(text)
 
     derived_plan_id = plan_id or md_path.stem
     derived_goal = goal or f"Execute action items from {md_path.name}"
-
+    
     tasks: List[TaskModel] = []
-
+    
     rule_list = list(rules) if rules is not None else default_rules()
     buckets: Dict[str, Tuple[Rule, List[ExtractedItem]]] = {}
     for r in rule_list:
         buckets[r.name] = (r, [])
-
+    
     # Stable assignment: first matching rule wins.
     for item in extracted:
         for r in rule_list:
             if r.matches(item):
                 buckets[r.name][1].append(item)
                 break
-
+    
     # Task generation with hierarchy and explicit deps
     prev_tasks: Dict[int, str] = {} # indent_level -> last_task_id
     
@@ -328,11 +346,14 @@ def md_to_plan(
                     depends_on=list(set(deps)),
                     files=list(item.file_paths),
                     mode=r.mode,
+                    macro_lane=macro_lane,
+                    micro_lane=micro_lane,
                 )
             )
             prev_tasks[item.indent] = tid
-
+    
     return PlanModel(plan=PlanMetadata(id=derived_plan_id, goal=derived_goal), tasks=tasks)
+
 
 
 def plan_to_yaml(plan: PlanModel) -> str:

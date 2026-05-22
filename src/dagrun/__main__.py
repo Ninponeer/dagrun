@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from .parser import load_plan
 from .engine import DagEngine, DagError
-from .md2plan import extract_action_items, extracted_to_json, md_to_plan, plan_to_yaml_with_header
+from .md2plan import extract_action_items, extracted_to_json, md_to_plan, plan_to_yaml_with_header, plan_to_yaml
 from .rules import load_ruleset
 from .workspace import ensure_dagrun_dir, find_project_root
 
@@ -37,6 +37,13 @@ def main():
     # Visualize command
     viz_parser = subparsers.add_parser("visualize", help="Generate a Mermaid chart for a .plan file")
     viz_parser.add_argument("plan", type=Path, help="Path to the .plan file")
+
+    # Invalidate command
+    inv_parser = subparsers.add_parser("invalidate", help="Invalidate tasks and their dependencies")
+    inv_parser.add_argument("plan", type=Path, help="Path to the .plan file")
+    inv_parser.add_argument("--macro", type=str, help="Macro lane to invalidate")
+    inv_parser.add_argument("--micro", type=str, help="Micro lane to invalidate")
+    inv_parser.add_argument("--task", type=str, help="Specific task ID to invalidate")
 
     # Embed Visualization command
     embed_parser = subparsers.add_parser("embed-viz", help="Embed the Mermaid chart into the source Markdown file")
@@ -103,6 +110,42 @@ def main():
             print(engine.to_mermaid())
         except Exception as e:
             print(f"❌ Visualization failed: {e}", file=sys.stderr)
+            sys.exit(1)
+        return
+
+    elif args.command == "invalidate":
+        try:
+            plan = load_plan(args.plan)
+            engine = DagEngine(plan)
+            
+            impacted = set()
+            if args.task:
+                impacted = engine.invalidate_task(args.task)
+                print(f"Invalidating task '{args.task}' and its downstream dependencies...")
+            elif args.macro:
+                impacted = engine.invalidate_lane(args.macro, args.micro)
+                print(f"Invalidating Macro-Lane '{args.macro}'" + (f" (Micro: {args.micro})" if args.micro else "") + " and dependencies...")
+            else:
+                print("❌ Error: You must specify either --task or --macro to invalidate.", file=sys.stderr)
+                sys.exit(1)
+
+            if not impacted:
+                print("No tasks were impacted by this invalidation.")
+                return
+
+            print(f"✅ {len(impacted)} task(s) reset to PENDING.")
+            
+            # Save the updated plan
+            out_yaml = plan_to_yaml_with_header(
+                plan,
+                source_path=args.plan,
+                generator_version=_get_version(),
+            )
+            args.plan.write_text(out_yaml, encoding="utf-8")
+            print(f"✅ Updated plan saved to: {args.plan}")
+
+        except Exception as e:
+            print(f"❌ Invalidation failed: {e}", file=sys.stderr)
             sys.exit(1)
         return
 
