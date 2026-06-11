@@ -22,6 +22,8 @@ class TaskModel(BaseModel):
     files: List[str] = Field(default_factory=list, description="Relevant file paths")
     mode: Literal["pull", "push", "either"] = Field(default="either", description="Scheduling mode")
     status: TaskStatus = Field(default=TaskStatus.PENDING, description="Current status of the task")
+    verification_cmd: Optional[str] = Field(default=None, description="Shell command to verify task completion")
+    result: Optional[str] = Field(default=None, description="Stored result or output of the task execution")
     macro_lane: Optional[str] = Field(default=None, description="Macro swim lane for architectural organization")
     micro_lane: Optional[str] = Field(default=None, description="Micro swim lane for specialized tracking")
 
