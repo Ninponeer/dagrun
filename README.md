@@ -39,9 +39,9 @@ A structured DSL defining:
 - file targets  
 - scheduling mode (pull, push, either)
 
-Example (escaped for Markdown safety):
+Example:
 
-\`\`\`yaml
+```yaml
 plan:
   id: PIPELINE-14
   goal: "Stabilize ingestion pipeline"
@@ -62,7 +62,7 @@ tasks:
     depends_on: [T1]
     files: ["src/pipeline/memory.cpp"]
     mode: push
-\`\`\`
+```
 
 ---
 
@@ -87,7 +87,6 @@ A local command and event API enabling agents to:
 - query task readiness  
 - retrieve context  
 - mark tasks complete  
-- subscribe to events  
 - update plan state  
 
 ### 5. Editor Integration (Optional)  
@@ -117,61 +116,88 @@ It focuses on:
 DAGrun is a post‑ceremony orchestration substrate for modern development workflows.
 
 ---
- 
+
 ## Usage
- 
+
 ### Installation
 ```bash
 pip install .
 ```
- 
+
 ### Commands
- 
+
 #### 1. Initialize Workspace
 Creates a `.dagrun` folder in your project root to store plans and state.
 ```bash
 dagrun init /path/to/project
 ```
- 
-#### 2. Convert Markdown to Plan
-Converts a Markdown action plan into a structured `.plan` YAML file.
-```bash
-dagrun md to-plan action_plan.md
-```
-*Outputs to `.dagrun/<filename>.plan` by default.*
- 
-#### 3. Validate Plan
+
+#### 2. Validate Plan
 Checks for schema correctness and DAG logical errors (cycles, missing dependencies).
 ```bash
 dagrun validate my_plan.plan
 ```
- 
-#### 4. Visualize DAG
+
+#### 3. Visualize DAG
 Generates a Mermaid.js graph definition for visualization in Mermaid-compatible viewers.
 ```bash
 dagrun visualize my_plan.plan
 ```
- 
-#### 5. Execute Plan
-Runs the tasks in the plan according to their dependencies.
+
+#### 4. Status
+Show current progress (human or JSON).
+```bash
+dagrun status my_plan.plan
+dagrun status my_plan.plan --json
+```
+
+#### 5. Agent workflow (primary integration path)
+
+Claim the next ready task for a specific agent:
+```bash
+dagrun next my_plan.plan --agent dev-agent
+dagrun next my_plan.plan --agent dev-agent --json
+```
+
+Mark a task complete (optionally with a result note):
+```bash
+dagrun complete my_plan.plan T1 --result "Implemented and smoke-tested"
+```
+
+Mark a task failed:
+```bash
+dagrun fail my_plan.plan T2 --error "Missing dependency X"
+```
+
+State is persisted under `.dagrun/<plan_id>.state.json` so progress survives across process restarts. This is the intended interface for Hermes profiles and other agents.
+
+#### 6. Run (experimental)
+Lists currently ready tasks. Full automatic execution is not yet implemented; prefer the agent commands above.
 ```bash
 dagrun run my_plan.plan
 ```
- 
+
 ---
- 
+
+## Hermes / multi-agent notes
+
+- Map each Hermes profile to a stable `agent` name that matches the `agent:` field in `.plan` files.
+- Agents should only act on tasks returned by `dagrun next --agent <id>`.
+- After finishing work, call `dagrun complete` (or `fail`) so dependents become ready.
+- Use `dagrun status --json` for machine-readable situational awareness.
+
+---
+
 ## Roadmap
 
-
-- [ ] DSL schema  
-- [ ] Parser + validator  
-- [ ] DAG builder  
-- [ ] Hybrid scheduler  
-- [ ] Agent interface (RPC)  
-- [ ] Markdown action-plan → `.plan` converter  
+- [x] DSL schema  
+- [x] Parser + validator  
+- [x] DAG builder  
+- [x] Agent CLI surface (`next` / `complete` / `fail` / `status`)  
+- [ ] Hybrid scheduler events (push notifications)  
+- [ ] Markdown action-plan → `.plan` converter polish  
 - [ ] Editor extension  
-- [ ] Graph visualization  
-- [ ] Multi‑agent concurrency  
+- [ ] Multi‑agent concurrency guards  
 - [ ] Conflict detection  
 - [ ] Plan auto‑generation helpers  
 
@@ -185,9 +211,9 @@ Apache 2.0 — see `LICENSE`.
 
 ## Status
 
-Early scaffolding.  
+Early but usable for agent-driven workflows.  
 Core concepts stable.  
-Implementation underway.
+Agent CLI surface in place.
 
 ---
 
