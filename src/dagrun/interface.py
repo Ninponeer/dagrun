@@ -2,6 +2,7 @@ from typing import List, Optional, Dict, Any
 from .engine import DagEngine, DagError
 from .models import TaskModel, TaskStatus
 
+
 class AgentInterface:
     def __init__(self, engine: DagEngine, state_manager=None):
         self.engine = engine
@@ -27,9 +28,12 @@ class AgentInterface:
             self.state_manager.save_state(self.engine.plan)
         return True
 
-    def fail_task(self, task_id: str, error: str = ""):
-        if task_id in self.engine.tasks:
-            self.engine.tasks[task_id].status = TaskStatus.FAILED
-            self.engine.tasks[task_id].result = f"Error: {error}"
-            if self.state_manager:
-                self.state_manager.save_state(self.engine.plan)
+    def fail_task(self, task_id: str, error: str = "") -> bool:
+        if task_id not in self.engine.tasks:
+            return False
+        task = self.engine.tasks[task_id]
+        task.status = TaskStatus.FAILED
+        task.result = f"Error: {error}" if error else "Error"
+        if self.state_manager:
+            self.state_manager.save_state(self.engine.plan)
+        return True
