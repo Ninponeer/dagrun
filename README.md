@@ -1,4 +1,5 @@
 # DAGrun  
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 ### A Directed Acyclic Graph Orchestrator for AI‑Augmented Development
 
 **DAGrun** is a local‑first, agent‑aware orchestration engine that converts structured plan files into an executable dependency graph. It enables AI agents to collaborate on development tasks through deterministic, dependency‑driven execution.
@@ -232,7 +233,7 @@ dagrun run my_plan.plan
 
 ## License
 
-Apache 2.0 — see `LICENSE`.
+AGPL-3.0 — see `LICENSE`.
 
 ---
 
